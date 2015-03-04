@@ -285,7 +285,10 @@ impl Emitter {
     {
         try!(self.emit_start_element_initial(target, name, attributes, namespace));
 
-        io_wrap(write!(target, "/>"))
+        let r = io_wrap(write!(target, "/>"));
+        self.after_start_element();
+        self.after_end_element();
+        r
     }
 
     pub fn emit_start_element<'a, 'b, W, N, I>(&mut self, target: &mut W,
@@ -297,8 +300,9 @@ impl Emitter {
               I: Iterator<Item=UriMapping<'a>>
     {
         try!(self.emit_start_element_initial(target, name, attributes, namespace));
-
-        io_wrap(write!(target, ">"))
+        let r = io_wrap(write!(target, ">"));
+        self.after_start_element();
+        r
     }
 
     pub fn emit_namespace_attributes<'a, W, N, I>(&mut self, target: &mut W,
