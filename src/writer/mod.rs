@@ -4,7 +4,7 @@ pub use self::config::EmitterConfig;
 use self::emitter::Emitter;
 use self::events::XmlEvent;
 
-mod emitter;
+pub mod emitter;
 pub mod config;
 pub mod events;
 
