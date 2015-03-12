@@ -1,6 +1,7 @@
-use std::old_io;
 use std::iter;
 use std::fmt;
+use std::io;
+use std::io::Write;
 
 use common;
 use name::Name;
@@ -21,7 +22,7 @@ pub enum EmitterErrorKind {
 pub struct EmitterError {
     kind: EmitterErrorKind,
     message: &'static str,
-    cause: Option<old_io::IoError>
+    cause: Option<io::Error>
 }
 
 impl fmt::Debug for EmitterError {
@@ -44,14 +45,14 @@ pub fn error(kind: EmitterErrorKind, message: &'static str) -> EmitterError {
 }
 
 #[inline]
-fn io_error(err: old_io::IoError) -> EmitterError {
+fn io_error(err: io::Error) -> EmitterError {
     EmitterError { kind: EmitterErrorKind::IoError, message: "Input/output error", cause: Some(err) }
 }
 
 pub type EmitterResult<T> = Result<T, EmitterError>;
 
 #[inline]
-pub fn io_wrap<T>(result: old_io::IoResult<T>) -> EmitterResult<T> {
+pub fn io_wrap<T>(result: io::Result<T>) -> EmitterResult<T> {
     result.map_err(io_error)
 }
 
@@ -151,15 +152,15 @@ impl Emitter {
         *self.indent_stack.last_mut().unwrap() = WROTE_NOTHING;
     }
 
-    fn write_newline<W: Writer>(&mut self, target: &mut W, level: usize) -> EmitterResult<()> {
-        io_try!(target.write_str(self.config.line_separator.as_slice()));
+    fn write_newline<W: Write>(&mut self, target: &mut W, level: usize) -> EmitterResult<()> {
+        io_try!(target.write_all(self.config.line_separator.as_bytes()));
         for _ in iter::range(0, level) {
-            io_try!(target.write_str(self.config.indent_string.as_slice()));
+            io_try!(target.write_all(self.config.indent_string.as_bytes()));
         }
         Ok(())
     }
 
-    fn before_markup<W: Writer>(&mut self, target: &mut W) -> EmitterResult<()> {
+    fn before_markup<W: Write>(&mut self, target: &mut W) -> EmitterResult<()> {
         if !self.wrote_text() && (self.indent_level > 0 || self.wrote_markup()) {
             let indent_level = self.indent_level;
             try!(self.write_newline(target, indent_level));
@@ -174,7 +175,7 @@ impl Emitter {
         self.set_wrote_markup();
     }
 
-    fn before_start_element<W: Writer>(&mut self, target: &mut W) -> EmitterResult<()> {
+    fn before_start_element<W: Write>(&mut self, target: &mut W) -> EmitterResult<()> {
         try!(self.before_markup(target));
         self.indent_stack.push(WROTE_NOTHING);
         Ok(())
@@ -185,7 +186,7 @@ impl Emitter {
         self.indent_level += 1;
     }
 
-    fn before_end_element<W: Writer>(&mut self, target: &mut W) -> EmitterResult<()> {
+    fn before_end_element<W: Write>(&mut self, target: &mut W) -> EmitterResult<()> {
         if self.indent_level > 0 && self.wrote_markup() && !self.wrote_text() {
             let indent_level = self.indent_level;
             self.write_newline(target, indent_level - 1)
@@ -206,7 +207,7 @@ impl Emitter {
         self.set_wrote_text();
     }
 
-    pub fn emit_start_document<W: Writer>(&mut self, target: &mut W, 
+    pub fn emit_start_document<W: Write>(&mut self, target: &mut W, 
                                           version: XmlVersion, 
                                           encoding: &str, 
                                           standalone: Option<bool>) -> EmitterResult<()> {
@@ -231,7 +232,7 @@ impl Emitter {
         )
     }
 
-    fn check_document_started<W: Writer>(&mut self, target: &mut W) -> EmitterResult<()> {
+    fn check_document_started<W: Write>(&mut self, target: &mut W) -> EmitterResult<()> {
         if !self.start_document_emitted && self.config.write_document_declaration {
             self.emit_start_document(target, common::XmlVersion::Version10, "utf-8", None)
         } else {
@@ -239,7 +240,7 @@ impl Emitter {
         }
     }
 
-    pub fn emit_processing_instruction<W: Writer>(&mut self,
+    pub fn emit_processing_instruction<W: Write>(&mut self,
                                                   target: &mut W,
                                                   name: &str,
                                                   data: Option<&str>) -> EmitterResult<()> {
@@ -260,7 +261,7 @@ impl Emitter {
                                                    name: Name<'b>,
                                                    attributes: &[Attribute],
                                                    namespace: &'a N) -> EmitterResult<()>
-        where W: Writer,
+        where W: Write,
               N: NamespaceIterable<'a, Iter=I>,
               I: Iterator<Item=UriMapping<'a>>
     {
@@ -279,7 +280,7 @@ impl Emitter {
                                                name: Name<'b>, 
                                                attributes: &[Attribute],
                                                namespace: &'a N) -> EmitterResult<()>
-        where W: Writer,
+        where W: Write,
               N: NamespaceIterable<'a, Iter=I>,
               I: Iterator<Item=UriMapping<'a>>
     {
@@ -295,7 +296,7 @@ impl Emitter {
                                                name: Name<'b>, 
                                                attributes: &[Attribute], 
                                                namespace: &'a N) -> EmitterResult<()>
-        where W: Writer,
+        where W: Write,
               N: NamespaceIterable<'a, Iter=I>,
               I: Iterator<Item=UriMapping<'a>>
     {
@@ -307,7 +308,7 @@ impl Emitter {
 
     pub fn emit_namespace_attributes<'a, W, N, I>(&mut self, target: &mut W,
                                                   namespace: &'a N) -> EmitterResult<()>
-        where W: Writer,
+        where W: Write,
               N: NamespaceIterable<'a, Iter=I>,
               I: Iterator<Item=UriMapping<'a>>
     {
@@ -323,7 +324,7 @@ impl Emitter {
         Ok(())
     }
 
-    pub fn emit_attributes<W: Writer>(&mut self, target: &mut W,
+    pub fn emit_attributes<W: Write>(&mut self, target: &mut W,
                                       attributes: &[Attribute]) -> EmitterResult<()> {
         for attr in attributes.iter() {
             io_try!(write!(target, " {}=\"{}\"", attr.name.to_repr(), escape_str(attr.value)))
@@ -331,33 +332,33 @@ impl Emitter {
         Ok(())
     }
 
-    pub fn emit_end_element<W: Writer>(&mut self, target: &mut W,
+    pub fn emit_end_element<W: Write>(&mut self, target: &mut W,
                                        name: Name) -> EmitterResult<()> {
         wrapped_with!(self; before_end_element(target) and after_end_element,
             io_wrap(write!(target, "</{}>", name.to_repr()))
         )
     }
 
-    pub fn emit_cdata<W: Writer>(&mut self, target: &mut W, content: &str) -> EmitterResult<()> {
+    pub fn emit_cdata<W: Write>(&mut self, target: &mut W, content: &str) -> EmitterResult<()> {
         if self.config.cdata_to_characters {
             self.emit_characters(target, content)
         } else {
-            io_try!(target.write_str("<![CDATA["));
-            io_try!(target.write_str(content));
-            io_try!(target.write_str("]]>"));
+            io_try!(target.write_all("<![CDATA[".as_bytes()));
+            io_try!(target.write_all(content.as_bytes()));
+            io_try!(target.write_all("]]>".as_bytes()));
             self.after_text();
             Ok(())
         }
     }
 
-    pub fn emit_characters<W: Writer>(&mut self, target: &mut W,
+    pub fn emit_characters<W: Write>(&mut self, target: &mut W,
                                       content: &str) -> EmitterResult<()> {
-        io_try!(target.write_str(escape_str(content).as_slice()));
+        io_try!(target.write_all(escape_str(content).as_bytes()));
         self.after_text();
         Ok(())
     }
 
-    pub fn emit_comment<W: Writer>(&mut self, target: &mut W, content: &str) -> EmitterResult<()> {
+    pub fn emit_comment<W: Write>(&mut self, target: &mut W, content: &str) -> EmitterResult<()> {
         Ok(())  // TODO: proper write
     }
 }

@@ -3,8 +3,7 @@
 //! The most important type in this module is `EventReader`, which provides an iterator
 //! view for events in XML document.
 
-use std::old_io::Buffer;
-use std::old_io::{MemReader, BufReader};
+use std::io::Read;
 
 use self::parser::PullParser;
 use self::events::XmlEvent;
@@ -16,20 +15,20 @@ mod parser;
 pub mod config;
 pub mod events;
 
-/// Simple wrapper around an `std::old_io::Buffer` which provides pull-based XML parsing.
+/// Simple wrapper around an `std::io::Read` which provides pull-based XML parsing.
 pub struct EventReader<B> {
     source: B,
     parser: PullParser
 }
 
-impl<B: Buffer> EventReader<B> {
-    /// Creates a new parser, consuming given `Buffer`.
+impl<B: Read> EventReader<B> {
+    /// Creates a new parser, consuming given `Read`.
     #[inline]
     pub fn new(source: B) -> EventReader<B> {
         EventReader::new_with_config(source, ParserConfig::new())
     }
 
-    /// Creates a new parser with the provded configuration, consuming given `Buffer`.
+    /// Creates a new parser with the provded configuration, consuming given `Read`.
     #[inline]
     pub fn new_with_config(source: B, config: ParserConfig) -> EventReader<B> {
         EventReader { source: source, parser: PullParser::new(config) }
@@ -60,7 +59,7 @@ pub struct Events<'a, B: 'a> {
     finished: bool
 }
 
-impl<'a, B: Buffer> Iterator for Events<'a, B> {
+impl<'a, B: Read> Iterator for Events<'a, B> {
     type Item = XmlEvent;
     
     #[inline]
@@ -74,35 +73,6 @@ impl<'a, B: Buffer> Iterator for Events<'a, B> {
             }
             Some(ev)
         }
-    }
-}
-
-impl EventReader<MemReader> {
-    /// Convenience method to create a reader from an owned string.
-    #[inline]
-    pub fn new_from_string(source: String) -> EventReader<MemReader> {
-        EventReader::new_from_bytes(source.into_bytes())
-    }
-
-    /// Convenience method to create a reader from an owned vector of bytes.
-    #[inline]
-    pub fn new_from_bytes(source: Vec<u8>) -> EventReader<MemReader> {
-        EventReader::new(MemReader::new(source))
-    }
-
-}
-
-impl<'r> EventReader<BufReader<'r>> {
-    /// Convenience method to create a reader from a string slice.
-    #[inline]
-    pub fn new_from_str_slice(source: &'r str) -> EventReader<BufReader<'r>> {
-        EventReader::new_from_bytes_slice(source.as_bytes())
-    }
-
-    /// Convenience method to create a reader from a slice of bytes.
-    #[inline]
-    pub fn new_from_bytes_slice(source: &'r [u8]) -> EventReader<BufReader<'r>> {
-        EventReader::new(BufReader::new(source))
     }
 }
 

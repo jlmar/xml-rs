@@ -3,6 +3,7 @@ pub use self::config::EmitterConfig;
 
 use self::emitter::Emitter;
 use self::events::XmlEvent;
+use std::io::Write;
 
 pub mod emitter;
 pub mod config;
@@ -13,7 +14,7 @@ pub struct EventWriter<W> {
     emitter: Emitter
 }
 
-impl<W: Writer> EventWriter<W> {
+impl<W: Write> EventWriter<W> {
     #[inline]
     pub fn new(sink: W) -> EventWriter<W> {
         EventWriter::new_with_config(sink, EmitterConfig::new())
