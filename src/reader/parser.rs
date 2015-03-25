@@ -360,7 +360,7 @@ impl PullParser {
 
         let invoke_callback = |this: &mut PullParser, t| {
             let name = this.take_buf();
-            match name.as_slice().parse() {
+            match name.parse() {
                 Ok(name) => on_name(this, t, name),
                 Err(_) => Some(self_error!(this; "Qualified name is invalid: {}", name))
             }
@@ -411,7 +411,7 @@ impl PullParser {
                     let value = self.take_buf();
                     on_value(self, value)
                 }
-                _ => self.append_str_continue(t.to_string().as_slice()),
+                _ => self.append_str_continue(&t.to_string()),
             },
 
             Token::ReferenceStart => {
@@ -423,7 +423,7 @@ impl PullParser {
                 Some(self_error!(self; "Unexpected token inside attribute value: <")),
 
             // Every character except " and ' and < is okay
-            _  => self.append_str_continue(t.to_string().as_slice()),
+            _  => self.append_str_continue(&t.to_string()),
         }
     }
 
@@ -441,7 +441,7 @@ impl PullParser {
 
             _ if t.contains_char_data() => {  // Non-whitespace char data
                 self.inside_whitespace = false;
-                self.append_str_continue(t.to_string().as_slice())
+                self.append_str_continue(&t.to_string())
             }
 
             Token::ReferenceEnd => { // Semi-colon in a text outside an entity
@@ -471,7 +471,7 @@ impl PullParser {
                     } else if self.inside_whitespace && !self.config.whitespace_to_characters {
                         Some(XmlEvent::Whitespace(buf))
                     } else if self.config.trim_whitespace {
-                        Some(XmlEvent::Characters(buf.as_slice().trim_matches(is_whitespace_char).to_string()))
+                        Some(XmlEvent::Characters(buf.trim_matches(is_whitespace_char).to_string()))
                     } else {
                         Some(XmlEvent::Characters(buf))
                     }
@@ -549,7 +549,7 @@ impl PullParser {
 
                     // Don't need to check for declaration because it has mandatory attributes
                     // but there is none
-                    match name.as_slice() {
+                    match &name[..] {
                         // Name is empty, it is an error
                         "" => Some(self_error!(self; "Encountered processing instruction without name")),
 
@@ -575,7 +575,7 @@ impl PullParser {
                     // self.buf contains PI name
                     let name = self.take_buf();
 
-                    match name.as_slice() {
+                    match &name[..] {
                         // We have not ever encountered an element and have not parsed XML declaration
                         "xml" if !self.encountered_element && !self.parsed_declaration =>
                             self.into_state_continue(State::InsideDeclaration(DeclarationSubstate::BeforeVersion)),
@@ -615,7 +615,7 @@ impl PullParser {
 
                 // Any other token should be treated as plain characters
                 _ => {
-                    self.buf.push_str(t.to_string().as_slice());
+                    self.buf.push_str(&t.to_string());
                     None
                 }
             },
@@ -650,7 +650,7 @@ impl PullParser {
             },
 
             DeclarationSubstate::InsideVersion => self.read_qualified_name(t, QualifiedNameTarget::AttributeNameTarget, |this, token, name| {
-                match name.local_name.as_slice() {
+                match &name.local_name[..] {
                     "ersion" if name.namespace.is_none() =>
                         this.into_state_continue(State::InsideDeclaration(
                             if token == Token::EqualsSign {
@@ -670,7 +670,7 @@ impl PullParser {
             },
 
             DeclarationSubstate::InsideVersionValue => self.read_attribute_value(t, |this, value| {
-                this.data.version = match value.as_slice() {
+                this.data.version = match &value[..] {
                     "1.0" => Some(XmlVersion::Version10),
                     "1.1" => Some(XmlVersion::Version11),
                     _     => None
@@ -691,7 +691,7 @@ impl PullParser {
             },
 
             DeclarationSubstate::InsideEncoding => self.read_qualified_name(t, QualifiedNameTarget::AttributeNameTarget, |this, token, name| {
-                match name.local_name.as_slice() {
+                match &name.local_name[..] {
                     "ncoding" if name.namespace.is_none() =>
                         this.into_state_continue(State::InsideDeclaration(
                             if token == Token::EqualsSign { DeclarationSubstate::InsideEncodingValue } else { DeclarationSubstate::AfterEncoding }
@@ -719,7 +719,7 @@ impl PullParser {
             },
 
             DeclarationSubstate::InsideStandaloneDecl => self.read_qualified_name(t, QualifiedNameTarget::AttributeNameTarget, |this, token, name| {
-                match name.local_name.as_slice() {
+                match &name.local_name[..] {
                     "tandalone" if name.namespace.is_none() =>
                         this.into_state_continue(State::InsideDeclaration(
                             if token == Token::EqualsSign {
@@ -739,7 +739,7 @@ impl PullParser {
             },
 
             DeclarationSubstate::InsideStandaloneDeclValue => self.read_attribute_value(t, |this, value| {
-                let standalone = match value.as_slice() {
+                let standalone = match &value[..] {
                     "yes" => Some(true),
                     "no"  => Some(false),
                     _     => None
@@ -849,10 +849,10 @@ impl PullParser {
                     // declaring a new prefix; it is sufficient to check prefix only
                     // because "xmlns" prefix is reserved
                     Some(prefix) if prefix == namespace::NS_XMLNS_PREFIX => {
-                        let ln = name.local_name.as_slice();
+                        let ln = &name.local_name[..];
                         if ln == namespace::NS_XMLNS_PREFIX {
                             Some(self_error!(this; "Cannot redefine '{}' prefix", namespace::NS_XMLNS_PREFIX))
-                        } else if ln == namespace::NS_XML_PREFIX && value.as_slice() != namespace::NS_XML_URI {
+                        } else if ln == namespace::NS_XML_PREFIX && &value[..] != namespace::NS_XML_URI {
                             Some(self_error!(this; "'{}' prefix cannot be rebound to another value", namespace::NS_XML_PREFIX))
                         } else if value.is_empty() {
                             Some(self_error!(this; "Cannot undefine a prefix: {}", ln))
@@ -863,8 +863,8 @@ impl PullParser {
                     }
 
                     // declaring default namespace
-                    None if name.local_name.as_slice() == namespace::NS_XMLNS_PREFIX =>
-                        match value.as_slice() {
+                    None if &name.local_name[..] == namespace::NS_XMLNS_PREFIX =>
+                        match &value[..] {
                             val if val == namespace::NS_XMLNS_PREFIX ||
                                    val == namespace::NS_XML_PREFIX =>
                                 Some(self_error!(this; "Namespace '{}' cannot be default", value)),
@@ -936,7 +936,7 @@ impl PullParser {
     fn inside_comment(&mut self, t: Token) -> Option<XmlEvent> {
         match t {
             // Double dash is illegal inside a comment
-            Token::Chunk(ref s) if s.as_slice() == "--" => Some(self_error!(self; "Unexpected token inside a comment: --")),
+            Token::Chunk(ref s) if &s[..] == "--" => Some(self_error!(self; "Unexpected token inside a comment: --")),
 
             Token::CommentEnd if self.config.ignore_comments => {
                 self.lexer.enable_errors();
@@ -951,7 +951,7 @@ impl PullParser {
 
             _ if self.config.ignore_comments => None,  // Do not modify buffer if ignoring the comment
 
-            _ => self.append_str_continue(t.to_string().as_slice()),
+            _ => self.append_str_continue(&t.to_string()),
         }
     }
 
@@ -968,11 +968,11 @@ impl PullParser {
                 self.into_state(State::OutsideTag, event)
             }
 
-            Token::Whitespace(_) => self.append_str_continue(t.to_string().as_slice()),
+            Token::Whitespace(_) => self.append_str_continue(&t.to_string()),
 
             _ => {
                 self.inside_whitespace = false;
-                self.append_str_continue(t.to_string().as_slice())
+                self.append_str_continue(&t.to_string())
             }
         }
     }
@@ -992,7 +992,7 @@ impl PullParser {
                 // TODO: check for unicode correctness
                 let name = self.data.take_ref_data();
                 let name_len = name.len();  // compute once
-                let c = match name.as_slice() {
+                let c = match &name[..] {
                     "lt"   => Ok('<'),
                     "gt"   => Ok('>'),
                     "amp"  => Ok('&'),
@@ -1010,7 +1010,7 @@ impl PullParser {
                             }
                         }
                     }
-                    _ if name_len > 1 && name.as_slice().char_at(0) == '#' => {
+                    _ if name_len > 1 && name.starts_with('#') => {
                         let num_str = &name[1..name_len];
                         if num_str == "0" {
                             Err(self_error!(self; "Null character entity is not allowed"))
