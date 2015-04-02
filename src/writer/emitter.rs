@@ -154,7 +154,7 @@ impl Emitter {
 
     fn write_newline<W: Write>(&mut self, target: &mut W, level: usize) -> EmitterResult<()> {
         io_try!(target.write_all(self.config.line_separator.as_bytes()));
-        for _ in iter::range(0, level) {
+        for _ in iter::range_inclusive(0, level) {
             io_try!(target.write_all(self.config.indent_string.as_bytes()));
         }
         Ok(())
