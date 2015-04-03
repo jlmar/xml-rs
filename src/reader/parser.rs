@@ -141,7 +141,7 @@ enum QualifiedNameTarget {
     ClosingTagNameTarget
 }
 
-#[derive(Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum QuoteToken {
     SingleQuoteToken,
     DoubleQuoteToken
@@ -979,7 +979,8 @@ impl PullParser {
 
     fn inside_reference(&mut self, t: Token, prev_st: State) -> Option<XmlEvent> {
         use std::char;
-        use std::num::from_str_radix;
+        use std::str::FromStr;
+        use rustc_serialize::hex::FromHex;
 
         match t {
             Token::Character(c) if !self.data.ref_data.is_empty() && is_name_char(c) ||
@@ -1004,8 +1005,8 @@ impl PullParser {
                         if num_str == "0" {
                             Err(self_error!(self; "Null character entity is not allowed"))
                         } else {
-                            match from_str_radix(num_str, 16).ok().and_then(char::from_u32) {
-                                Some(c) => Ok(c),
+                            match num_str.from_hex().ok().and_then(|x|String::from_utf8(x).ok()) {
+                                Some(mut c) => Ok(c.pop().unwrap()),
                                 None    => Err(self_error!(self; "Invalid hexadecimal character number in an entity: {}", name))
                             }
                         }
@@ -1015,7 +1016,7 @@ impl PullParser {
                         if num_str == "0" {
                             Err(self_error!(self; "Null character entity is not allowed"))
                         } else {
-                            match from_str_radix(num_str, 10).ok().and_then(char::from_u32) {
+                            match FromStr::from_str(num_str).ok().and_then(|x|char::from_u32(x)) {
                                 Some(c) => Ok(c),
                                 None    => Err(self_error!(self; "Invalid decimal character number in an entity: {}", name))
                             }
